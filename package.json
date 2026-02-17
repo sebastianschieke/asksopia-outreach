@@ -17,7 +17,7 @@
     "@pdf-lib/fontkit": "^1.1.1",
     "archiver": "^7.0.1",
     "drizzle-orm": "^0.45.1",
-    "lucide-react": "^0.344.0",
+    "lucide-react": "^0.571.0",
     "next": "16.1.6",
     "pdf-lib": "^1.17.1",
     "pg": "^8.18.0",
