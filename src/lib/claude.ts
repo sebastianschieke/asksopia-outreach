@@ -17,7 +17,7 @@ export async function generatePersonalizedIntro(
   const context = signalDescription || signalCategory || 'general interest';
 
   const response = await client.messages.create({
-    model: 'claude-opus-4-6',
+    model: 'claude-sonnet-4-5-20250929',
     max_tokens: 300,
     system: `Du bist ein professioneller Texter für deutsche Geschäftsbriefe. Deine Aufgabe ist es, einen persönlichen, aber professionellen Einleitungsabsatz zu erstellen.
 
