@@ -73,9 +73,11 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
     }
 
     // Strip HTML tags from template to create a clean reference text for Claude
+    // Replace [Firma] placeholder with the actual company name
     const templateReference = (template.body_html || '')
       .replace(/<[^>]+>/g, '')
       .replace(/\{\{qr_code\}\}/g, '[QR-Code hier]')
+      .replace(/\[Firma\]/g, recipient.company || 'Ihrem Unternehmen')
       .trim();
 
     // Generate full letter via Claude

@@ -15,7 +15,7 @@ VALUES (
   'DACH Consulting Default',
   NULL,
   'Persönliche Einladung',
-  '<p>Ich habe gesehen, dass Ihr Team bei [Firma] in den letzten Monaten gewachsen ist. Vier neue Kolleginnen und Kollegen – das ist ein starkes Signal.</p>
+  '<p>Ich habe gesehen, dass Ihr Team in den letzten Monaten gewachsen ist. Vier neue Kolleginnen und Kollegen – das ist ein starkes Signal.</p>
 <p>Doch mit jedem neuen Teammitglied stellt sich dieselbe Frage: Wie kommt das Wissen, das in den Köpfen Ihrer erfahrenen Berater steckt, schnell und strukturiert bei den Neuen an?</p>
 <p>Nach 30 Jahren als Berater kenne ich das Problem. Wissen wächst – aber es skaliert nicht mit.</p>
 <p>Das zeigt sich jeden Tag:</p>

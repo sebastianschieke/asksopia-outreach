@@ -53,7 +53,8 @@ REGELN:
 9. Formatiere als HTML mit <p> Tags für Absätze, <ul><li> für Bullets, <strong> für Betonungen
 10. Der gesamte Brief sollte auf EINE A4-Seite passen (ca. 250-350 Wörter)
 11. Erwähne NIEMALS, dass du eine KI bist
-12. Passe die Bullet-Points an das Signal/die Situation an — sie müssen nicht identisch mit der Vorlage sein`,
+12. Passe die Bullet-Points an das Signal/die Situation an — sie müssen nicht identisch mit der Vorlage sein
+13. Verwende IMMER den echten Firmennamen des Empfängers — NIEMALS Platzhalter wie [Firma] oder ähnliches`,
     messages: [
       {
         role: 'user',
