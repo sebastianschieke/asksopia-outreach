@@ -118,13 +118,25 @@ export interface LandingPageData {
 /**
  * ClickUp task structure (simplified)
  */
+export interface ClickUpCustomField {
+  id: string;
+  name?: string;
+  type?: string;
+  value: unknown;
+  type_config?: {
+    options?: Array<{
+      id: string;
+      name: string;
+      orderindex: number;
+    }>;
+    [key: string]: unknown;
+  };
+}
+
 export interface ClickUpTask {
   id: string;
   name: string;
-  custom_fields?: Array<{
-    id: string;
-    value: unknown;
-  }>;
+  custom_fields?: ClickUpCustomField[];
   [key: string]: unknown;
 }
 
