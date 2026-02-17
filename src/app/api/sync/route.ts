@@ -9,7 +9,7 @@ export async function POST(request: NextRequest) {
   try {
     // Simple password protection via Authorization header
     const authHeader = request.headers.get('Authorization');
-    const expectedAuth = `Bearer ${process.env.SYNC_PASSWORD}`;
+    const expectedAuth = `Bearer ${process.env.ADMIN_PASSWORD}`;
 
     if (!authHeader || authHeader !== expectedAuth) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
