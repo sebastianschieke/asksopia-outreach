@@ -2,12 +2,11 @@ import { NextRequest, NextResponse } from 'next/server';
 import { db, recipients, letterTemplates } from '@/lib/db';
 import { eq } from 'drizzle-orm';
 import { generateLetterPdf, getLetterFilename } from '@/lib/pdf';
-import { generatePersonalizedIntro } from '@/lib/claude';
+import { generateFullLetter } from '@/lib/claude';
 import type { Recipient, LetterTemplate } from '@/lib/types';
 
 interface LetterRequestBody {
-  personalizedIntro?: string;
-  bodyHtml?: string;
+  letterHtml?: string; // Full letter HTML from the editor
 }
 
 interface RouteParams {
@@ -80,7 +79,7 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
       return NextResponse.json({ error: 'No letter template found' }, { status: 404 });
     }
 
-    // Generate PDF
+    // Generate PDF using template directly (no Claude personalization)
     const pdfBuffer = await generateLetterPdf(recipient, template);
 
     const filename = getLetterFilename(recipient);
@@ -99,7 +98,8 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
 
 /**
  * POST /api/letter/[id]
- * Generate PDF letter with Claude personalization
+ * Generate PDF letter with full Claude-written content.
+ * Accepts letterHtml from the editor, or generates via Claude if not provided.
  */
 export async function POST(request: NextRequest, { params }: RouteParams) {
   try {
@@ -127,73 +127,83 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
 
     const recipient = recipientResult[0] as unknown as Recipient;
 
-    // Parse optional request body for custom intro/body from editor
+    // Parse request body
     let body: LetterRequestBody = {};
     try {
       body = await request.json();
     } catch {
-      // No body provided — will generate intro via Claude
+      // No body provided — will generate via Claude
     }
 
-    // Fetch letter template by industry, fallback to default
-    let template: LetterTemplate | null = null;
+    // Determine the letter HTML
+    let letterHtml: string;
 
-    if (recipient.industry) {
-      const industryTemplate = await db
-        .select()
-        .from(letterTemplates)
-        .where(eq(letterTemplates.industry, recipient.industry))
-        .limit(1);
-      template = (industryTemplate[0] || null) as unknown as LetterTemplate | null;
-    }
-
-    if (!template) {
-      const defaultTemplate = await db
-        .select()
-        .from(letterTemplates)
-        .where(eq(letterTemplates.is_default, true))
-        .limit(1);
-      template = (defaultTemplate[0] || null) as unknown as LetterTemplate | null;
-    }
-
-    if (!template) {
-      return NextResponse.json({ error: 'No letter template found' }, { status: 404 });
-    }
-
-    // Use custom intro from editor, or generate via Claude
-    let personalizedIntro: string;
-    if (body.personalizedIntro) {
-      personalizedIntro = body.personalizedIntro;
+    if (body.letterHtml) {
+      // Use edited letter from the modal
+      letterHtml = body.letterHtml;
     } else {
-      personalizedIntro = await generatePersonalizedIntro(
+      // Fetch template as reference and generate via Claude
+      let template: LetterTemplate | null = null;
+
+      if (recipient.industry) {
+        const industryTemplate = await db
+          .select()
+          .from(letterTemplates)
+          .where(eq(letterTemplates.industry, recipient.industry))
+          .limit(1);
+        template = (industryTemplate[0] || null) as unknown as LetterTemplate | null;
+      }
+
+      if (!template) {
+        const defaultTemplate = await db
+          .select()
+          .from(letterTemplates)
+          .where(eq(letterTemplates.is_default, true))
+          .limit(1);
+        template = (defaultTemplate[0] || null) as unknown as LetterTemplate | null;
+      }
+
+      const templateReference = template
+        ? (template.body_html || '').replace(/<[^>]+>/g, '').replace(/\{\{qr_code\}\}/g, '[QR-Code hier]').trim()
+        : '';
+
+      letterHtml = await generateFullLetter(
         recipient.first_name || '',
+        recipient.last_name || '',
         recipient.company,
         recipient.signal_category,
-        recipient.signal_description
+        recipient.signal_description,
+        templateReference
       );
     }
 
-    // Use custom body from editor if provided
-    const effectiveTemplate = body.bodyHtml
-      ? { ...template, body_html: body.bodyHtml }
-      : template;
+    // Create a synthetic template with the full letter HTML for PDF generation
+    const effectiveTemplate: LetterTemplate = {
+      id: 0,
+      name: 'Generated',
+      industry: null,
+      subject_line: 'Persönliche Einladung',
+      body_html: letterHtml,
+      is_default: false,
+      created_at: new Date(),
+      updated_at: new Date(),
+    };
 
-    // Generate PDF with personalization
-    const pdfBuffer = await generateLetterPdf(recipient, effectiveTemplate, personalizedIntro);
+    // Generate PDF — no placeholder substitution needed (Claude wrote the full letter)
+    const pdfBuffer = await generateLetterPdf(recipient, effectiveTemplate);
 
-    // Save the personalized intro to DB for audit trail
+    // Save the letter content to DB for audit trail
     try {
       await db
         .update(recipients)
         .set({
-          letter_personalized_intro: personalizedIntro,
+          letter_personalized_intro: letterHtml,
           letter_generated_at: new Date(),
           updated_at: new Date(),
         })
         .where(eq(recipients.id, recipientId));
     } catch (dbErr) {
-      console.error('Failed to save letter intro to DB:', dbErr);
-      // Don't fail the PDF generation if DB write fails
+      console.error('Failed to save letter content to DB:', dbErr);
     }
 
     const filename = getLetterFilename(recipient);

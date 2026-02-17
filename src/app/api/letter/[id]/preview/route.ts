@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db, recipients, letterTemplates } from '@/lib/db';
 import { eq } from 'drizzle-orm';
-import { generatePersonalizedIntro } from '@/lib/claude';
+import { generateFullLetter } from '@/lib/claude';
 import type { Recipient, LetterTemplate } from '@/lib/types';
 
 interface RouteParams {
@@ -18,7 +18,8 @@ function checkAdmin(request: NextRequest): boolean {
 
 /**
  * POST /api/letter/[id]/preview
- * Fetch recipient data + Claude-generated personalized intro for the editor
+ * Generate full personalized letter via Claude for editing in the modal.
+ * Returns: recipient info + full letter HTML (ready to edit).
  */
 export async function POST(request: NextRequest, { params }: RouteParams) {
   try {
@@ -46,7 +47,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
 
     const recipient = recipientResult[0] as unknown as Recipient;
 
-    // Fetch letter template
+    // Fetch letter template (used as reference for Claude)
     let template: LetterTemplate | null = null;
 
     if (recipient.industry) {
@@ -71,37 +72,21 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       return NextResponse.json({ error: 'No letter template found. Please seed a default template.' }, { status: 404 });
     }
 
-    // Generate personalized intro using Claude
-    const personalizedIntro = await generatePersonalizedIntro(
+    // Strip HTML tags from template to create a clean reference text for Claude
+    const templateReference = (template.body_html || '')
+      .replace(/<[^>]+>/g, '')
+      .replace(/\{\{qr_code\}\}/g, '[QR-Code hier]')
+      .trim();
+
+    // Generate full letter via Claude
+    const fullLetterHtml = await generateFullLetter(
       recipient.first_name || '',
+      recipient.last_name || '',
       recipient.company,
       recipient.signal_category,
-      recipient.signal_description
+      recipient.signal_description,
+      templateReference
     );
-
-    // Resolve placeholders in template body (but keep {{personalized_intro}} separate)
-    const firstName = recipient.first_name || '';
-    const lastName = recipient.last_name || '';
-    const fullName = [firstName, lastName].filter(Boolean).join(' ') || 'Unknown';
-
-    const formatAnrede = (anrede: string | null | undefined): string => {
-      if (!anrede) return '';
-      switch (anrede.toLowerCase()) {
-        case 'herr': return `Sehr geehrter Herr ${lastName},`;
-        case 'frau': return `Sehr geehrte Frau ${lastName},`;
-        case 'dear': return `Dear ${firstName},`;
-        default: return '';
-      }
-    };
-
-    const resolvedBody = (template.body_html || '')
-      .replace(/\{\{first_name\}\}/g, firstName)
-      .replace(/\{\{last_name\}\}/g, lastName)
-      .replace(/\{\{full_name\}\}/g, fullName)
-      .replace(/\{\{company\}\}/g, recipient.company || '')
-      .replace(/\{\{industry\}\}/g, recipient.industry || '')
-      .replace(/\{\{anrede\}\}/g, formatAnrede(recipient.anrede))
-      .replace(/\{\{personalized_intro\}\}/g, '{{personalized_intro}}'); // Keep this placeholder
 
     return NextResponse.json({
       recipient: {
@@ -118,8 +103,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
         signal_description: recipient.signal_description,
         token: recipient.token,
       },
-      personalizedIntro,
-      templateBody: resolvedBody,
+      letterHtml: fullLetterHtml,
     });
   } catch (error) {
     console.error('Letter preview error:', error);

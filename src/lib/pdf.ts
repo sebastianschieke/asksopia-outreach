@@ -180,6 +180,8 @@ function formatAnrede(anrede: string | null | undefined, firstName: string, last
 
 /**
  * Replace placeholders in text
+ * Note: {{qr_code}} is handled separately by the HTML parser.
+ * For Claude-generated letters, most placeholders are already resolved.
  */
 function replacePlaceholders(
   text: string,

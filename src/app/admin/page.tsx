@@ -50,8 +50,7 @@ export default function AdminPage() {
   // Letter Editor state
   const [showEditor, setShowEditor] = useState(false);
   const [editorRecipient, setEditorRecipient] = useState<EditorRecipient | null>(null);
-  const [editorIntro, setEditorIntro] = useState('');
-  const [editorBody, setEditorBody] = useState('');
+  const [editorLetterHtml, setEditorLetterHtml] = useState('');
   const [editorLoading, setEditorLoading] = useState(false);
   const [editorGenerating, setEditorGenerating] = useState(false);
 
@@ -116,7 +115,6 @@ export default function AdminPage() {
         setStoredPassword('');
         setError('Invalid password');
       } else {
-        // Don't log out on server errors — just show the error
         setError(message);
       }
     } finally {
@@ -173,13 +171,12 @@ export default function AdminPage() {
     }
   };
 
-  // Open the letter editor modal — calls preview API to get Claude-generated intro
+  // Open the letter editor modal — calls preview API to get Claude-generated full letter
   const handleOpenEditor = async (recipientId: number) => {
     setEditorLoading(true);
     setShowEditor(true);
     setEditorRecipient(null);
-    setEditorIntro('');
-    setEditorBody('');
+    setEditorLetterHtml('');
 
     try {
       const response = await fetch(`/api/letter/${recipientId}/preview`, {
@@ -194,8 +191,7 @@ export default function AdminPage() {
 
       const data = await response.json();
       setEditorRecipient(data.recipient);
-      setEditorIntro(data.personalizedIntro);
-      setEditorBody(data.templateBody);
+      setEditorLetterHtml(data.letterHtml);
     } catch (err) {
       alert(`Error: ${err instanceof Error ? err.message : 'Unknown error'}`);
       setShowEditor(false);
@@ -204,8 +200,8 @@ export default function AdminPage() {
     }
   };
 
-  // Regenerate just the personalized intro via Claude
-  const handleRegenerateIntro = async () => {
+  // Regenerate the full letter via Claude
+  const handleRegenerateLetter = async () => {
     if (!editorRecipient) return;
     setEditorLoading(true);
 
@@ -215,10 +211,10 @@ export default function AdminPage() {
         headers: { Authorization: getAuthHeader() },
       });
 
-      if (!response.ok) throw new Error('Failed to regenerate intro');
+      if (!response.ok) throw new Error('Failed to regenerate letter');
 
       const data = await response.json();
-      setEditorIntro(data.personalizedIntro);
+      setEditorLetterHtml(data.letterHtml);
     } catch (err) {
       alert(`Error: ${err instanceof Error ? err.message : 'Unknown error'}`);
     } finally {
@@ -226,7 +222,7 @@ export default function AdminPage() {
     }
   };
 
-  // Generate final PDF with edited intro + body, then download
+  // Generate final PDF with the edited letter HTML, then download
   const handleGeneratePdf = async () => {
     if (!editorRecipient) return;
     setEditorGenerating(true);
@@ -239,8 +235,7 @@ export default function AdminPage() {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          personalizedIntro: editorIntro,
-          bodyHtml: editorBody,
+          letterHtml: editorLetterHtml,
         }),
       });
 
@@ -262,31 +257,6 @@ export default function AdminPage() {
       alert(`Error: ${err instanceof Error ? err.message : 'Unknown error'}`);
     } finally {
       setEditorGenerating(false);
-    }
-  };
-
-  // Legacy direct download (without editor)
-  const handleGenerateLetter = async (recipientId: number, personalize: boolean = true) => {
-    try {
-      const method = personalize ? 'POST' : 'GET';
-      const response = await fetch(`/api/letter/${recipientId}`, {
-        method,
-        headers: { Authorization: getAuthHeader() },
-      });
-
-      if (!response.ok) {
-        throw new Error('Failed to generate letter');
-      }
-
-      const blob = await response.blob();
-      const url = window.URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `letter_${recipientId}.pdf`;
-      a.click();
-      window.URL.revokeObjectURL(url);
-    } catch (err) {
-      alert(`Error: ${err instanceof Error ? err.message : 'Unknown error'}`);
     }
   };
 
@@ -647,7 +617,7 @@ export default function AdminPage() {
               {editorLoading && !editorRecipient ? (
                 <div className="flex items-center justify-center py-12">
                   <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500" />
-                  <span className="ml-3 text-gray-600">Generating personalized intro with Claude...</span>
+                  <span className="ml-3 text-gray-600">Claude is writing the letter...</span>
                 </div>
               ) : editorRecipient ? (
                 <>
@@ -682,46 +652,37 @@ export default function AdminPage() {
                     )}
                   </div>
 
-                  {/* Personalized Intro (editable) */}
+                  {/* Greeting note */}
+                  <div className="bg-yellow-50 rounded-lg p-3">
+                    <p className="text-xs text-yellow-700">
+                      <strong>Note:</strong> The greeting (e.g. &quot;Lieber Rainer,&quot;) is added manually to the printed letter. The text below starts right after the greeting.
+                    </p>
+                  </div>
+
+                  {/* Full Letter (editable) */}
                   <div>
                     <div className="flex justify-between items-center mb-2">
                       <label className="text-sm font-semibold text-gray-700">
-                        Personalized Introduction
+                        Letter Content (HTML)
                       </label>
                       <button
-                        onClick={handleRegenerateIntro}
+                        onClick={handleRegenerateLetter}
                         disabled={editorLoading}
                         className="flex items-center gap-1 text-xs px-3 py-1 bg-purple-100 hover:bg-purple-200 text-purple-700 rounded-full transition disabled:opacity-50"
                       >
                         <Sparkles size={14} />
-                        {editorLoading ? 'Generating...' : 'Regenerate'}
+                        {editorLoading ? 'Generating...' : 'Regenerate with Claude'}
                       </button>
                     </div>
                     <textarea
-                      value={editorIntro}
-                      onChange={(e) => setEditorIntro(e.target.value)}
-                      rows={4}
-                      className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm leading-relaxed"
-                      placeholder="Claude-generated personalized intro will appear here..."
-                    />
-                    <p className="text-xs text-gray-400 mt-1">
-                      This text appears right after the greeting, before the main letter body.
-                    </p>
-                  </div>
-
-                  {/* Letter Body (editable) */}
-                  <div>
-                    <label className="text-sm font-semibold text-gray-700 mb-2 block">
-                      Letter Body (HTML)
-                    </label>
-                    <textarea
-                      value={editorBody}
-                      onChange={(e) => setEditorBody(e.target.value)}
-                      rows={14}
+                      value={editorLetterHtml}
+                      onChange={(e) => setEditorLetterHtml(e.target.value)}
+                      rows={20}
                       className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm font-mono leading-relaxed"
+                      placeholder="Claude-generated letter will appear here..."
                     />
                     <p className="text-xs text-gray-400 mt-1">
-                      Uses HTML tags. The QR code is placed where {'{{qr_code}}'} appears. {'{{personalized_intro}}'} is replaced with the intro above.
+                      Uses HTML tags. The QR code appears where {'{{qr_code}}'} is written.
                     </p>
                   </div>
                 </>
@@ -739,7 +700,7 @@ export default function AdminPage() {
                 </button>
                 <button
                   onClick={handleGeneratePdf}
-                  disabled={editorGenerating || !editorIntro}
+                  disabled={editorGenerating || !editorLetterHtml}
                   className="flex items-center gap-2 px-5 py-2 bg-blue-500 hover:bg-blue-600 text-white font-semibold rounded-lg transition disabled:opacity-50"
                 >
                   <Download size={18} />

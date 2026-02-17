@@ -1,21 +1,23 @@
--- Run these two commands in Neon SQL Editor
+-- Run these commands in Neon SQL Editor
 
--- 1. Add column for storing edited personalized intro
+-- 1. Add column for storing edited personalized intro (if not already done)
 ALTER TABLE recipients ADD COLUMN IF NOT EXISTS letter_personalized_intro TEXT;
 
--- 2. Insert default letter template (matching the Michailov letter)
+-- 2. Delete old template if it exists
+DELETE FROM letter_templates WHERE name = 'DACH Consulting Default';
+
+-- 3. Insert reference letter template
+-- This is used as a REFERENCE for Claude AI to write the full letter.
+-- Claude adapts structure and tone based on the signal, not fill-in-the-blank.
+-- Only {{qr_code}} is a functional placeholder (for PDF QR code rendering).
 INSERT INTO letter_templates (name, industry, subject_line, body_html, is_default, created_at, updated_at)
 VALUES (
   'DACH Consulting Default',
   NULL,
   'Persönliche Einladung',
-  '<p>{{anrede}}</p>
-<p>{{personalized_intro}}</p>
-<p>Sie lesen diesen Brief – ohne LinkedIn-Spam, ohne Cold Calls.</p>
-<p>So direkt sollte auch kritisches Wissen in Ihrem Beratungshaus verfügbar sein, wenn es gebraucht wird.</p>
-<p>Nach 30 Jahren als Berater kenne ich das Problem: Ihr wertvollstes Asset – Projekt-Know-how, Methodenkompetenz, Client Intelligence – steckt in den Köpfen einzelner Senior-Berater.</p>
-<p>Sie wachsen.</p>
-<p>Aber Ihr Wissen skaliert nicht mit.</p>
+  '<p>Ich habe gesehen, dass Ihr Team bei [Firma] in den letzten Monaten gewachsen ist. Vier neue Kolleginnen und Kollegen – das ist ein starkes Signal.</p>
+<p>Doch mit jedem neuen Teammitglied stellt sich dieselbe Frage: Wie kommt das Wissen, das in den Köpfen Ihrer erfahrenen Berater steckt, schnell und strukturiert bei den Neuen an?</p>
+<p>Nach 30 Jahren als Berater kenne ich das Problem. Wissen wächst – aber es skaliert nicht mit.</p>
 <p>Das zeigt sich jeden Tag:</p>
 <ul>
 <li>Teams erfinden Lösungen neu, die anderswo im Haus längst existieren</li>
