@@ -53,8 +53,13 @@ export default function AdminPage() {
         headers: { Authorization: authHeader },
       });
 
+      if (statsResponse.status === 401) {
+        throw new Error('AUTH_FAILED');
+      }
+
       if (!statsResponse.ok) {
-        throw new Error('Failed to load stats — check your password');
+        const errData = await statsResponse.json().catch(() => ({}));
+        throw new Error(`Stats failed: ${errData.error || statsResponse.statusText}`);
       }
 
       const statsData = await statsResponse.json();
@@ -71,6 +76,9 @@ export default function AdminPage() {
         headers: { Authorization: authHeader },
       });
 
+      if (recipientsResponse.status === 401) {
+        throw new Error('AUTH_FAILED');
+      }
       if (!recipientsResponse.ok) {
         throw new Error('Failed to load recipients');
       }
@@ -79,8 +87,15 @@ export default function AdminPage() {
       setRecipients(recipientsData.data);
       setTotal(recipientsData.total);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Unknown error');
-      setIsLoggedIn(false);
+      const message = err instanceof Error ? err.message : 'Unknown error';
+      if (message === 'AUTH_FAILED') {
+        setIsLoggedIn(false);
+        setStoredPassword('');
+        setError('Invalid password');
+      } else {
+        // Don't log out on server errors — just show the error
+        setError(message);
+      }
     } finally {
       setLoading(false);
     }
