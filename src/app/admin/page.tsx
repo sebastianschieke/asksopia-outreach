@@ -20,6 +20,7 @@ interface RecipientsResponse {
 
 export default function AdminPage() {
   const [password, setPassword] = useState('');
+  const [storedPassword, setStoredPassword] = useState('');
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [stats, setStats] = useState<Stats | null>(null);
   const [recipients, setRecipients] = useState<RecipientSummary[]>([]);
@@ -33,25 +34,27 @@ export default function AdminPage() {
 
   const handleLogin = (e: React.FormEvent) => {
     e.preventDefault();
+    setStoredPassword(password);
     setIsLoggedIn(true);
     setPassword('');
-    loadDashboard();
+    loadDashboardWithPassword(password);
   };
 
-  const getAuthHeader = () => `Bearer ${password}`;
+  const getAuthHeader = () => `Bearer ${storedPassword}`;
 
-  const loadDashboard = async () => {
+  const loadDashboardWithPassword = async (pw?: string) => {
+    const authHeader = `Bearer ${pw || storedPassword}`;
     setLoading(true);
     setError(null);
 
     try {
       // Load stats
       const statsResponse = await fetch('/api/admin/stats', {
-        headers: { Authorization: getAuthHeader() },
+        headers: { Authorization: authHeader },
       });
 
       if (!statsResponse.ok) {
-        throw new Error('Failed to load stats');
+        throw new Error('Failed to load stats — check your password');
       }
 
       const statsData = await statsResponse.json();
@@ -65,7 +68,7 @@ export default function AdminPage() {
       if (filterSignal) params.append('signal', filterSignal);
 
       const recipientsResponse = await fetch(`/api/admin/recipients?${params}`, {
-        headers: { Authorization: getAuthHeader() },
+        headers: { Authorization: authHeader },
       });
 
       if (!recipientsResponse.ok) {
@@ -77,10 +80,13 @@ export default function AdminPage() {
       setTotal(recipientsData.total);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Unknown error');
+      setIsLoggedIn(false);
     } finally {
       setLoading(false);
     }
   };
+
+  const loadDashboard = () => loadDashboardWithPassword();
 
   const handleSync = async () => {
     setLoading(true);
