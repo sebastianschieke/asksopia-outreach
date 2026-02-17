@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { AlertCircle, CheckCircle, Eye, FileText, LogOut, RefreshCw, Download } from 'lucide-react';
+import { AlertCircle, CheckCircle, Eye, FileText, LogOut, RefreshCw, Download, X, Sparkles } from 'lucide-react';
 import type { RecipientSummary } from '@/lib/types';
 
 interface Stats {
@@ -18,6 +18,21 @@ interface RecipientsResponse {
   data: RecipientSummary[];
 }
 
+interface EditorRecipient {
+  id: number;
+  first_name: string | null;
+  last_name: string | null;
+  company: string | null;
+  street: string | null;
+  city: string | null;
+  postal_code: string | null;
+  country: string | null;
+  anrede: string | null;
+  signal_category: string | null;
+  signal_description: string | null;
+  token: string;
+}
+
 export default function AdminPage() {
   const [password, setPassword] = useState('');
   const [storedPassword, setStoredPassword] = useState('');
@@ -31,6 +46,14 @@ export default function AdminPage() {
   const [offset, setOffset] = useState(0);
   const [total, setTotal] = useState(0);
   const limit = 50;
+
+  // Letter Editor state
+  const [showEditor, setShowEditor] = useState(false);
+  const [editorRecipient, setEditorRecipient] = useState<EditorRecipient | null>(null);
+  const [editorIntro, setEditorIntro] = useState('');
+  const [editorBody, setEditorBody] = useState('');
+  const [editorLoading, setEditorLoading] = useState(false);
+  const [editorGenerating, setEditorGenerating] = useState(false);
 
   const handleLogin = (e: React.FormEvent) => {
     e.preventDefault();
@@ -150,6 +173,99 @@ export default function AdminPage() {
     }
   };
 
+  // Open the letter editor modal — calls preview API to get Claude-generated intro
+  const handleOpenEditor = async (recipientId: number) => {
+    setEditorLoading(true);
+    setShowEditor(true);
+    setEditorRecipient(null);
+    setEditorIntro('');
+    setEditorBody('');
+
+    try {
+      const response = await fetch(`/api/letter/${recipientId}/preview`, {
+        method: 'POST',
+        headers: { Authorization: getAuthHeader() },
+      });
+
+      if (!response.ok) {
+        const errData = await response.json().catch(() => ({}));
+        throw new Error(errData.error || 'Failed to load preview');
+      }
+
+      const data = await response.json();
+      setEditorRecipient(data.recipient);
+      setEditorIntro(data.personalizedIntro);
+      setEditorBody(data.templateBody);
+    } catch (err) {
+      alert(`Error: ${err instanceof Error ? err.message : 'Unknown error'}`);
+      setShowEditor(false);
+    } finally {
+      setEditorLoading(false);
+    }
+  };
+
+  // Regenerate just the personalized intro via Claude
+  const handleRegenerateIntro = async () => {
+    if (!editorRecipient) return;
+    setEditorLoading(true);
+
+    try {
+      const response = await fetch(`/api/letter/${editorRecipient.id}/preview`, {
+        method: 'POST',
+        headers: { Authorization: getAuthHeader() },
+      });
+
+      if (!response.ok) throw new Error('Failed to regenerate intro');
+
+      const data = await response.json();
+      setEditorIntro(data.personalizedIntro);
+    } catch (err) {
+      alert(`Error: ${err instanceof Error ? err.message : 'Unknown error'}`);
+    } finally {
+      setEditorLoading(false);
+    }
+  };
+
+  // Generate final PDF with edited intro + body, then download
+  const handleGeneratePdf = async () => {
+    if (!editorRecipient) return;
+    setEditorGenerating(true);
+
+    try {
+      const response = await fetch(`/api/letter/${editorRecipient.id}`, {
+        method: 'POST',
+        headers: {
+          Authorization: getAuthHeader(),
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          personalizedIntro: editorIntro,
+          bodyHtml: editorBody,
+        }),
+      });
+
+      if (!response.ok) throw new Error('Failed to generate PDF');
+
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      const lastName = editorRecipient.last_name || 'Unknown';
+      const company = editorRecipient.company || 'Company';
+      a.download = `${lastName}_${company}_${editorRecipient.token}.pdf`;
+      a.click();
+      window.URL.revokeObjectURL(url);
+
+      // Refresh the dashboard to show updated letter_generated_at
+      await loadDashboard();
+    } catch (err) {
+      alert(`Error: ${err instanceof Error ? err.message : 'Unknown error'}`);
+    } finally {
+      setEditorGenerating(false);
+    }
+  };
+
+  // Legacy direct download (without editor)
   const handleGenerateLetter = async (recipientId: number, personalize: boolean = true) => {
     try {
       const method = personalize ? 'POST' : 'GET';
@@ -451,8 +567,8 @@ export default function AdminPage() {
                     </td>
                     <td className="px-6 py-4 text-sm flex gap-2">
                       <button
-                        onClick={() => handleGenerateLetter(recipient.id)}
-                        title="Generate PDF letter"
+                        onClick={() => handleOpenEditor(recipient.id)}
+                        title="Edit & Generate Letter"
                         className="p-1 hover:bg-gray-200 rounded transition"
                       >
                         <FileText size={18} className="text-blue-500" />
@@ -501,6 +617,139 @@ export default function AdminPage() {
           </div>
         </div>
       </div>
+
+      {/* Letter Editor Modal */}
+      {showEditor && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-xl shadow-2xl w-full max-w-3xl max-h-[90vh] overflow-y-auto">
+            {/* Modal Header */}
+            <div className="flex justify-between items-center px-6 py-4 border-b border-gray-200 sticky top-0 bg-white rounded-t-xl z-10">
+              <div>
+                <h2 className="text-xl font-bold" style={{ color: '#1a1a2e' }}>
+                  Letter Editor
+                </h2>
+                {editorRecipient && (
+                  <p className="text-sm text-gray-500">
+                    {editorRecipient.first_name} {editorRecipient.last_name} — {editorRecipient.company}
+                  </p>
+                )}
+              </div>
+              <button
+                onClick={() => setShowEditor(false)}
+                className="p-2 hover:bg-gray-100 rounded-lg transition"
+              >
+                <X size={20} className="text-gray-500" />
+              </button>
+            </div>
+
+            {/* Modal Body */}
+            <div className="px-6 py-4 space-y-5">
+              {editorLoading && !editorRecipient ? (
+                <div className="flex items-center justify-center py-12">
+                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500" />
+                  <span className="ml-3 text-gray-600">Generating personalized intro with Claude...</span>
+                </div>
+              ) : editorRecipient ? (
+                <>
+                  {/* Address Block (read-only) */}
+                  <div className="bg-gray-50 rounded-lg p-4">
+                    <h3 className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-2">Address</h3>
+                    <p className="text-sm text-gray-700">
+                      {editorRecipient.first_name} {editorRecipient.last_name}
+                    </p>
+                    {editorRecipient.company && (
+                      <p className="text-sm text-gray-700">{editorRecipient.company}</p>
+                    )}
+                    {editorRecipient.street && (
+                      <p className="text-sm text-gray-700">{editorRecipient.street}</p>
+                    )}
+                    <p className="text-sm text-gray-700">
+                      {[editorRecipient.postal_code, editorRecipient.city].filter(Boolean).join(' ')}
+                      {editorRecipient.country && editorRecipient.country !== 'Deutschland' && editorRecipient.country !== 'Germany'
+                        ? `, ${editorRecipient.country}`
+                        : ''}
+                    </p>
+                  </div>
+
+                  {/* Signal Info (read-only) */}
+                  <div className="bg-blue-50 rounded-lg p-4">
+                    <h3 className="text-xs font-semibold text-blue-400 uppercase tracking-wide mb-2">Signal</h3>
+                    <p className="text-sm font-medium text-blue-800">
+                      {editorRecipient.signal_category || 'No category'}
+                    </p>
+                    {editorRecipient.signal_description && (
+                      <p className="text-sm text-blue-700 mt-1">{editorRecipient.signal_description}</p>
+                    )}
+                  </div>
+
+                  {/* Personalized Intro (editable) */}
+                  <div>
+                    <div className="flex justify-between items-center mb-2">
+                      <label className="text-sm font-semibold text-gray-700">
+                        Personalized Introduction
+                      </label>
+                      <button
+                        onClick={handleRegenerateIntro}
+                        disabled={editorLoading}
+                        className="flex items-center gap-1 text-xs px-3 py-1 bg-purple-100 hover:bg-purple-200 text-purple-700 rounded-full transition disabled:opacity-50"
+                      >
+                        <Sparkles size={14} />
+                        {editorLoading ? 'Generating...' : 'Regenerate'}
+                      </button>
+                    </div>
+                    <textarea
+                      value={editorIntro}
+                      onChange={(e) => setEditorIntro(e.target.value)}
+                      rows={4}
+                      className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm leading-relaxed"
+                      placeholder="Claude-generated personalized intro will appear here..."
+                    />
+                    <p className="text-xs text-gray-400 mt-1">
+                      This text appears right after the greeting, before the main letter body.
+                    </p>
+                  </div>
+
+                  {/* Letter Body (editable) */}
+                  <div>
+                    <label className="text-sm font-semibold text-gray-700 mb-2 block">
+                      Letter Body (HTML)
+                    </label>
+                    <textarea
+                      value={editorBody}
+                      onChange={(e) => setEditorBody(e.target.value)}
+                      rows={14}
+                      className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm font-mono leading-relaxed"
+                    />
+                    <p className="text-xs text-gray-400 mt-1">
+                      Uses HTML tags. The QR code is placed where {'{{qr_code}}'} appears. {'{{personalized_intro}}'} is replaced with the intro above.
+                    </p>
+                  </div>
+                </>
+              ) : null}
+            </div>
+
+            {/* Modal Footer */}
+            {editorRecipient && (
+              <div className="flex justify-end gap-3 px-6 py-4 border-t border-gray-200 sticky bottom-0 bg-white rounded-b-xl">
+                <button
+                  onClick={() => setShowEditor(false)}
+                  className="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded-lg transition"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleGeneratePdf}
+                  disabled={editorGenerating || !editorIntro}
+                  className="flex items-center gap-2 px-5 py-2 bg-blue-500 hover:bg-blue-600 text-white font-semibold rounded-lg transition disabled:opacity-50"
+                >
+                  <Download size={18} />
+                  {editorGenerating ? 'Generating PDF...' : 'Generate PDF'}
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

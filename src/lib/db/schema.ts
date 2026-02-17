@@ -38,6 +38,7 @@ export const recipients = pgTable(
     letter_generated_at: timestamp('letter_generated_at'),
     letter_sent_at: timestamp('letter_sent_at'),
     letter_version: varchar('letter_version', { length: 50 }),
+    letter_personalized_intro: text('letter_personalized_intro'),
     created_at: timestamp('created_at').defaultNow().notNull(),
     updated_at: timestamp('updated_at').defaultNow().notNull(),
   },

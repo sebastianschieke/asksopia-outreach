@@ -5,6 +5,11 @@ import { generateLetterPdf, getLetterFilename } from '@/lib/pdf';
 import { generatePersonalizedIntro } from '@/lib/claude';
 import type { Recipient, LetterTemplate } from '@/lib/types';
 
+interface LetterRequestBody {
+  personalizedIntro?: string;
+  bodyHtml?: string;
+}
+
 interface RouteParams {
   params: Promise<{
     id: string;
@@ -122,6 +127,14 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
 
     const recipient = recipientResult[0] as unknown as Recipient;
 
+    // Parse optional request body for custom intro/body from editor
+    let body: LetterRequestBody = {};
+    try {
+      body = await request.json();
+    } catch {
+      // No body provided — will generate intro via Claude
+    }
+
     // Fetch letter template by industry, fallback to default
     let template: LetterTemplate | null = null;
 
@@ -147,16 +160,41 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       return NextResponse.json({ error: 'No letter template found' }, { status: 404 });
     }
 
-    // Generate personalized intro using Claude
-    const personalizedIntro = await generatePersonalizedIntro(
-      recipient.first_name || '',
-      recipient.company,
-      recipient.signal_category,
-      recipient.signal_description
-    );
+    // Use custom intro from editor, or generate via Claude
+    let personalizedIntro: string;
+    if (body.personalizedIntro) {
+      personalizedIntro = body.personalizedIntro;
+    } else {
+      personalizedIntro = await generatePersonalizedIntro(
+        recipient.first_name || '',
+        recipient.company,
+        recipient.signal_category,
+        recipient.signal_description
+      );
+    }
+
+    // Use custom body from editor if provided
+    const effectiveTemplate = body.bodyHtml
+      ? { ...template, body_html: body.bodyHtml }
+      : template;
 
     // Generate PDF with personalization
-    const pdfBuffer = await generateLetterPdf(recipient, template, personalizedIntro);
+    const pdfBuffer = await generateLetterPdf(recipient, effectiveTemplate, personalizedIntro);
+
+    // Save the personalized intro to DB for audit trail
+    try {
+      await db
+        .update(recipients)
+        .set({
+          letter_personalized_intro: personalizedIntro,
+          letter_generated_at: new Date(),
+          updated_at: new Date(),
+        })
+        .where(eq(recipients.id, recipientId));
+    } catch (dbErr) {
+      console.error('Failed to save letter intro to DB:', dbErr);
+      // Don't fail the PDF generation if DB write fails
+    }
 
     const filename = getLetterFilename(recipient);
     return new NextResponse(new Uint8Array(pdfBuffer), {
