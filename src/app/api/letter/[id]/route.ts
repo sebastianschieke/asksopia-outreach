@@ -189,6 +189,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       industry: null,
       subject_line: 'Persönliche Einladung',
       body_html: letterHtml,
+      vimeo_video_id: null,
       is_default: false,
       created_at: new Date(),
       updated_at: new Date(),
