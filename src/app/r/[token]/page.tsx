@@ -4,7 +4,7 @@ import { eq } from 'drizzle-orm';
 import { LandingClient } from './landing-client';
 import type { Recipient, LandingPageTemplate } from '@/lib/types';
 
-const BOOKING_URL = process.env.NEXT_PUBLIC_BOOKING_URL || 'https://calendly.com/asksopia';
+const BOOKING_URL = process.env.NEXT_PUBLIC_BOOKING_URL || 'https://calendly.com/sebastianschieke/knowledgeaiskassessment';
 
 async function getLandingPageData(token: string) {
   try {
@@ -21,16 +21,21 @@ async function getLandingPageData(token: string) {
 
     const recipient = recipientResult[0] as unknown as Recipient;
 
-    // Fetch landing template by industry, fallback to default
+    // Fetch landing template by industry (supports comma-separated list in template.industry), fallback to default
     let template: LandingPageTemplate | null = null;
 
     if (recipient.industry) {
-      const industryTemplate = await db
+      const allTemplates = await db
         .select()
         .from(landingPageTemplates)
-        .where(eq(landingPageTemplates.industry, recipient.industry))
-        .limit(1);
-      template = (industryTemplate[0] || null) as unknown as LandingPageTemplate | null;
+        .where(eq(landingPageTemplates.is_default, false));
+      const matched = (allTemplates as unknown as LandingPageTemplate[]).find((t) =>
+        t.industry
+          ?.split(',')
+          .map((s) => s.trim().toLowerCase())
+          .includes(recipient.industry!.toLowerCase())
+      );
+      template = matched || null;
     }
 
     if (!template) {

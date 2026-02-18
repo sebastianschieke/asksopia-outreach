@@ -10,6 +10,13 @@ interface RouteParams {
   }>;
 }
 
+function stripAnrede(html: string): string {
+  // Remove German salutations Claude may output despite instructions
+  return html
+    .replace(/^\s*<p>\s*(Sehr geehrte[rn]?|Liebe[r]?|Guten Tag)[^<]{0,150}<\/p>\s*/i, '')
+    .trimStart();
+}
+
 function checkAdmin(request: NextRequest): boolean {
   const authHeader = request.headers.get('Authorization');
   const expectedAuth = `Bearer ${process.env.ADMIN_PASSWORD}`;
@@ -81,7 +88,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       .trim();
 
     // Generate full letter via Claude
-    const fullLetterHtml = await generateFullLetter(
+    let fullLetterHtml = await generateFullLetter(
       recipient.first_name || '',
       recipient.last_name || '',
       recipient.company,
@@ -89,6 +96,9 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       recipient.signal_description,
       templateReference
     );
+
+    // Strip any salutation Claude may have added despite instructions
+    fullLetterHtml = stripAnrede(fullLetterHtml);
 
     return NextResponse.json({
       recipient: {

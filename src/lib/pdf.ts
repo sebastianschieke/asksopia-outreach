@@ -224,7 +224,6 @@ export async function generateLetterPdf(
   const helveticaBold = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
   const helveticaOblique = await pdfDoc.embedFont(StandardFonts.HelveticaOblique);
 
-  // Use standard fonts as fallback (serverless doesn't have filesystem access)
   const regularFont = helvetica;
 
   const { height, width } = page.getSize();
@@ -237,9 +236,10 @@ export async function generateLetterPdf(
   const primaryColor = rgb(0.22, 0.51, 0.84);
 
   const bodyFontSize = 10.5;
-  const lineHeight = 15;
-  const paragraphGap = 7;
+  const lineHeight = 17;
+  const paragraphGap = 12;
   const bulletIndent = 14;
+  const bodyBottomBoundary = margin + 120; // stop body content above footer/QR area
 
   const bodyHtml = template.body_html || '';
   const processedBody = replacePlaceholders(
@@ -289,6 +289,8 @@ export async function generateLetterPdf(
   }
 
   function drawFormattedParagraph(spans: TextSpan[], isBullet: boolean = false) {
+    if (y < bodyBottomBoundary) return;
+
     const xStart = isBullet ? margin + bulletIndent : margin;
     const availableWidth = isBullet ? maxTextWidth - bulletIndent : maxTextWidth;
 
@@ -306,6 +308,7 @@ export async function generateLetterPdf(
     const lines = allText.split('\n');
 
     for (const lineText of lines) {
+      if (y < bodyBottomBoundary) return;
       if (!lineText.trim()) {
         y -= lineHeight;
         continue;
@@ -317,11 +320,11 @@ export async function generateLetterPdf(
 
       let charOffset = 0;
 
-      const getSpanAtPosition = (pos: number): { bold: boolean; italic: boolean } => {
+      const getSpanAtPosition = (charPos: number): { bold: boolean; italic: boolean } => {
         let cumLen = 0;
         for (const span of spans) {
           const cleanText = span.text.replace(/\n/g, '');
-          if (pos < cumLen + cleanText.length) {
+          if (charPos < cumLen + cleanText.length) {
             return { bold: span.bold, italic: span.italic };
           }
           cumLen += cleanText.length;
@@ -339,6 +342,7 @@ export async function generateLetterPdf(
         const addWidth = currentLineSpans.length > 0 ? spaceWidth + wordWidth : wordWidth;
 
         if (currentLineWidth + addWidth > availableWidth && currentLineSpans.length > 0) {
+          if (y < bodyBottomBoundary) return;
           drawSpanLine(currentLineSpans, xStart, y, bodyFontSize);
           y -= lineHeight;
           currentLineSpans = [{ text: word, bold: spanInfo.bold, italic: spanInfo.italic }];
@@ -360,7 +364,7 @@ export async function generateLetterPdf(
         charOffset += word.length + 1;
       }
 
-      if (currentLineSpans.length > 0) {
+      if (currentLineSpans.length > 0 && y >= bodyBottomBoundary) {
         drawSpanLine(currentLineSpans, xStart, y, bodyFontSize);
         y -= lineHeight;
       }
@@ -399,6 +403,7 @@ export async function generateLetterPdf(
         blockText.includes('beste gr');
 
       if (isPS) {
+        if (y < bodyBottomBoundary) continue;
         const smallerSize = bodyFontSize - 1.5;
         const smallerLineHeight = lineHeight - 2;
         const xStart = margin;
@@ -427,6 +432,7 @@ export async function generateLetterPdf(
           const addWidth = currentLineSpans.length > 0 ? spaceWidth + wordWidth : wordWidth;
 
           if (currentLineWidth + addWidth > availableWidth && currentLineSpans.length > 0) {
+            if (y < bodyBottomBoundary) break;
             drawSpanLine(currentLineSpans, xStart, y, smallerSize);
             y -= smallerLineHeight;
             currentLineSpans = [{ text: word, ...spanInfo }];
@@ -446,14 +452,20 @@ export async function generateLetterPdf(
           }
           charOffset += word.length + 1;
         }
-        if (currentLineSpans.length > 0) {
+        if (currentLineSpans.length > 0 && y >= bodyBottomBoundary) {
           drawSpanLine(currentLineSpans, xStart, y, smallerSize);
           y -= smallerLineHeight;
         }
         y -= paragraphGap;
       } else {
+        const wasBullet = block.isBullet;
         drawFormattedParagraph(block.spans, block.isBullet);
-        if (!block.isBullet) {
+        // Add gap after every paragraph; add extra gap after the last bullet in a list
+        const nextBlock = blocks[bi + 1];
+        const nextIsBullet = nextBlock?.type === 'text' && nextBlock.isBullet;
+        if (wasBullet && !nextIsBullet) {
+          y -= paragraphGap * 2; // extra gap after bullet list ends
+        } else if (!wasBullet) {
           y -= paragraphGap;
         }
         if (isClosing) {

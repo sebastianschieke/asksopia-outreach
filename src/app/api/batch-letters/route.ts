@@ -1,11 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { db, recipients, letterTemplates, events } from '@/lib/db';
-import { eq, sql, and } from 'drizzle-orm';
+import { db, recipients, letterTemplates } from '@/lib/db';
+import { eq, sql } from 'drizzle-orm';
 import { generateLetterPdf, getLetterFilename } from '@/lib/pdf';
-import { generatePersonalizedIntro } from '@/lib/claude';
+import { generateFullLetter } from '@/lib/claude';
 import { computeRecipientStatus } from '@/lib/tracking';
 import archiver from 'archiver';
-import { Readable } from 'stream';
 import type { Recipient, LetterTemplate } from '@/lib/types';
 
 /**
@@ -103,24 +102,33 @@ export async function POST(request: NextRequest) {
           continue;
         }
 
-        // Generate personalized intro if requested
-        let personalizedIntro: string | undefined;
+        // Generate full letter via Claude if requested, otherwise use template as-is
+        let effectiveTemplate = template;
         if (personalize) {
           try {
-            personalizedIntro = await generatePersonalizedIntro(
+            const templateReference = (template.body_html || '')
+              .replace(/<[^>]+>/g, '')
+              .replace(/\{\{qr_code\}\}/g, '[QR-Code hier]')
+              .trim();
+            const letterHtml = await generateFullLetter(
               (recipient.first_name as string) || '',
+              (recipient.last_name as string) || '',
               recipient.company as string | null,
               recipient.signal_category as string | null,
-              recipient.signal_description as string | null
+              recipient.signal_description as string | null,
+              templateReference
             );
+            effectiveTemplate = {
+              ...template,
+              body_html: letterHtml,
+            };
           } catch (error) {
-            console.warn(`Failed to personalize for recipient ${recipient.id}:`, error);
-            personalizedIntro = undefined;
+            console.warn(`Failed to generate letter for recipient ${recipient.id}:`, error);
           }
         }
 
         // Generate PDF
-        const pdfBuffer = await generateLetterPdf(recipient as Recipient, template, personalizedIntro);
+        const pdfBuffer = await generateLetterPdf(recipient as Recipient, effectiveTemplate);
         const filename = getLetterFilename(recipient as Recipient);
 
         archive.append(pdfBuffer, { name: filename });

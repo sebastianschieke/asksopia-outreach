@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState, useRef } from 'react';
-import { Calendar, Mail, XCircle, CheckCircle2 } from 'lucide-react';
+import { Calendar, Mail, CheckCircle2 } from 'lucide-react';
 import type { Recipient, LandingPageTemplate } from '@/lib/types';
 
 declare global {
@@ -168,8 +168,7 @@ export function LandingClient({
   };
 
   const formatAnredeGreeting = (anrede: string | null): string => {
-    if (!anrede) return recipient.first_name || '';
-    switch (anrede) {
+    switch (anrede?.toLowerCase()) {
       case 'herr':
         return `Herr ${recipient.last_name || ''}`;
       case 'frau':
@@ -177,13 +176,13 @@ export function LandingClient({
       case 'dear':
         return recipient.first_name || '';
       default:
-        return recipient.first_name || '';
+        return recipient.last_name || recipient.first_name || '';
     }
   };
 
   const formatAnrede = (anrede: string | null): string => {
     if (!anrede) return '';
-    switch (anrede) {
+    switch (anrede?.toLowerCase()) {
       case 'herr':
         return `Sehr geehrter Herr ${recipient.last_name || ''}`;
       case 'frau':
@@ -202,6 +201,25 @@ export function LandingClient({
   const subheadline = landingTemplate?.subheadline
     ? replacePlaceholders(landingTemplate.subheadline)
     : 'Entdecken Sie, wie askSOPia.com Ihre Beratung effizienter macht.';
+
+  const signalSentence = (() => {
+    if (!recipient.signal_category && !recipient.signal_description) return null;
+    const company = recipient.company || 'Ihr Unternehmen';
+    switch (recipient.signal_category) {
+      case 'Growth':
+        return `Wachstum schafft Chancen – und neue Herausforderungen. Sehen Sie, wie askSOPia.com ${company} dabei hilft, skalierbar und effizient zu bleiben.`;
+      case 'Decline':
+        return `Gerade in schwierigen Phasen kommt es auf die richtigen Hebel an. Erfahren Sie, wie askSOPia.com ${company} gezielt unterstützen kann.`;
+      case 'Leadership Change':
+        return `Neue Führung, neue Möglichkeiten. Erfahren Sie, wie askSOPia.com diesen Übergang für ${company} zum Vorteil macht.`;
+      case 'Funding':
+        return `Mit frischem Kapital entstehen neue Prioritäten. Sehen Sie, wie askSOPia.com ${company} beim nächsten Wachstumsschritt begleitet.`;
+      case 'Strategic Shift':
+        return `Strategische Neuausrichtungen brauchen den richtigen Partner. Entdecken Sie, wie askSOPia.com ${company} auf diesem Weg unterstützt.`;
+      default:
+        return `Entdecken Sie, wie askSOPia.com auch ${company} effizienter und erfolgreicher macht.`;
+    }
+  })();
 
   const ctaButtonText = landingTemplate?.cta_button_text || 'Termin vereinbaren';
 
@@ -231,9 +249,7 @@ export function LandingClient({
         style={{ backgroundColor: '#ffffff', borderBottom: '1px solid #e5e5ea' }}
       >
         <div className="max-w-2xl mx-auto px-5 h-16 flex items-center">
-          <div className="text-lg font-bold" style={{ color: BLUE }}>
-            askSOPia
-          </div>
+          <img src="/ask_sopia.png" alt="askSOPia" className="h-8" />
         </div>
       </header>
 
@@ -242,12 +258,13 @@ export function LandingClient({
           <h1 className="text-2xl sm:text-3xl font-bold tracking-tight mb-3" style={{ color: NAVY }}>
             {greeting}
           </h1>
-          <p className="text-base sm:text-lg leading-relaxed" style={{ color: '#4b5563' }}>
-            {subheadline}
-          </p>
-          {recipient.company && (
-            <p className="mt-3 text-sm font-medium" style={{ color: BLUE }}>
-              Speziell für {recipient.company}
+          {signalSentence ? (
+            <p className="text-base sm:text-lg leading-relaxed" style={{ color: '#4b5563' }}>
+              {signalSentence}
+            </p>
+          ) : (
+            <p className="text-base sm:text-lg leading-relaxed" style={{ color: '#4b5563' }}>
+              {subheadline}
             </p>
           )}
         </section>
@@ -328,9 +345,7 @@ export function LandingClient({
       <footer style={{ borderTop: '1px solid #e5e5ea' }}>
         <div className="max-w-2xl mx-auto px-5 py-8">
           <div className="flex flex-col items-center text-center">
-            <div className="text-lg font-bold mb-4" style={{ color: BLUE }}>
-              askSOPia
-            </div>
+            <img src="/ask_sopia.png" alt="askSOPia" className="h-7 mb-4" />
             <div className="text-sm space-y-1" style={{ color: '#6b7280' }}>
               <p className="font-medium" style={{ color: NAVY }}>
                 Sebastian Schieke
@@ -344,7 +359,7 @@ export function LandingClient({
               <p>&copy; {new Date().getFullYear()} NOVELDO AI GmbH. Alle Rechte vorbehalten.</p>
               <div className="flex items-center justify-center gap-4">
                 <a
-                  href="https://noveldo.com/terms-of-service"
+                  href="https://asksopia.com/imprint"
                   target="_blank"
                   rel="noopener noreferrer"
                   className="hover:underline"
@@ -353,7 +368,7 @@ export function LandingClient({
                   Impressum
                 </a>
                 <a
-                  href="https://noveldo.com/privacy-policy"
+                  href="https://asksopia.com/privacy"
                   target="_blank"
                   rel="noopener noreferrer"
                   className="hover:underline"

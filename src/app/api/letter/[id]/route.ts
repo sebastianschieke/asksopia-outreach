@@ -58,12 +58,17 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
     let template: LetterTemplate | null = null;
 
     if (recipient.industry) {
-      const industryTemplate = await db
+      const allLetterTemplates = await db
         .select()
         .from(letterTemplates)
-        .where(eq(letterTemplates.industry, recipient.industry))
-        .limit(1);
-      template = (industryTemplate[0] || null) as unknown as LetterTemplate | null;
+        .where(eq(letterTemplates.is_default, false));
+      const matched = (allLetterTemplates as unknown as LetterTemplate[]).find((t) =>
+        t.industry
+          ?.split(',')
+          .map((s) => s.trim().toLowerCase())
+          .includes(recipient.industry!.toLowerCase())
+      );
+      template = matched || null;
     }
 
     if (!template) {

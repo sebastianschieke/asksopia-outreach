@@ -35,6 +35,9 @@ const FIELD_IDS = {
   // Signal
   signalCategory: 'f5313b5f-bdd8-4c82-b2f9-a10ab3829f4e',
   signalDescription: 'd5892399-edaa-4e45-8331-405a642aa58b',
+
+  // Industry
+  industry: '51ab00b5-daa0-4be3-a497-75d2564df235',
 } as const;
 
 /**
@@ -54,6 +57,20 @@ const ENGAGEMENT_STATUS_OPTIONS: Record<string, string> = {
 const ANREDE_OPTIONS: Record<string, string> = {
   Herr: 'cf38286b-4f70-4053-bc08-26cc326c25df',
   Frau: '63ede71b-fee0-4076-a9a8-c1ce88cf8555',
+};
+
+/**
+ * Industry dropdown option IDs
+ */
+const INDUSTRY_OPTIONS: Record<string, string> = {
+  'Management Consulting': 'b57f8444-049d-4783-82b8-ea543636cfae',
+  'IT Consulting': 'ed1d0439-790a-4d06-b4e3-f36a12f8cf0c',
+  'Strategy Consulting': '73b5b013-b7c8-4c4c-af74-3a2d0c9c618c',
+  'HR Consulting': 'e0160641-4942-4d0b-949c-a67cf477ef81',
+  'Financial Advisory': '1454c1c1-ea4e-491a-8645-4314699dd535',
+  'Operations Consulting': 'e5ecdefb-38b3-4371-b61a-4a7a5834b8d9',
+  'Interim Management': 'd5c0b7e1-5a9f-4f63-9c72-2867a440bdc3',
+  'Transformation': '22b85132-0789-487b-8ecd-cd315a610e03',
 };
 
 /**
@@ -174,11 +191,20 @@ function getFieldValue(task: ClickUpTask, fieldId: string): unknown {
   const field = task.custom_fields.find((f) => f.id === fieldId);
   if (!field) return null;
 
-  // For dropdown fields, the value is the option index (number)
-  // We need to resolve it to the option name
-  if (field.type === 'drop_down' && field.type_config?.options && typeof field.value === 'number') {
-    const option = field.type_config.options[field.value];
-    return option?.name ?? null;
+  // For dropdown fields, resolve to option name
+  // ClickUp may return either a numeric index or a UUID string as the value
+  if (field.type === 'drop_down' && field.type_config?.options) {
+    if (typeof field.value === 'number') {
+      const option = field.type_config.options[field.value];
+      return option?.name ?? null;
+    }
+    if (typeof field.value === 'string') {
+      // Value is the option UUID — find by id
+      const option = field.type_config.options.find(
+        (o: { id: string; name: string }) => o.id === field.value
+      );
+      return option?.name ?? null;
+    }
   }
 
   return field.value ?? null;
@@ -201,6 +227,7 @@ export function parseTaskToRecipient(task: ClickUpTask): Partial<Recipient> {
   const bookingUrl = getFieldValue(task, FIELD_IDS.bookingUrl) as string | null;
   const signalCategory = getFieldValue(task, FIELD_IDS.signalCategory) as string | null;
   const signalDescription = getFieldValue(task, FIELD_IDS.signalDescription) as string | null;
+  const industry = getFieldValue(task, FIELD_IDS.industry) as string | null;
 
   // Token: use existing or generate new
   const existingToken = getFieldValue(task, FIELD_IDS.landingPageToken) as string | null;
@@ -213,7 +240,7 @@ export function parseTaskToRecipient(task: ClickUpTask): Partial<Recipient> {
     last_name: lastName,
     company,
     email,
-    industry: null,
+    industry,
     linkedin_url: linkedinUrl,
     booking_url: bookingUrl,
     street,
@@ -361,4 +388,4 @@ export async function markLetterSent(recipientId: number): Promise<void> {
 }
 
 // Export field IDs and option maps for use in other modules
-export { FIELD_IDS, ENGAGEMENT_STATUS_OPTIONS, ANREDE_OPTIONS, SIGNAL_CATEGORY_OPTIONS };
+export { FIELD_IDS, ENGAGEMENT_STATUS_OPTIONS, ANREDE_OPTIONS, SIGNAL_CATEGORY_OPTIONS, INDUSTRY_OPTIONS };

@@ -42,7 +42,7 @@ REFERENZ-BRIEF (als Vorlage für Struktur und Ton — nicht 1:1 kopieren, sonder
 ${templateReference}
 
 REGELN:
-1. Schreibe den KOMPLETTEN Brieftext (ohne Anrede — die kommt separat)
+1. Schreibe den KOMPLETTEN Brieftext — OHNE Anrede/Begrüßung. Der erste Satz ist SOFORT der inhaltliche Einstieg. KEIN "Sehr geehrter", KEIN "Lieber", KEIN "Guten Tag". Die Anrede wird separat handschriftlich hinzugefügt.
 2. Beginne mit einer persönlichen Anknüpfung basierend auf dem Signal
 3. Führe NATÜRLICH über zum Thema Beratungswissen/Wissensmanagement
 4. Verwende 3-5 Bullet-Points für konkrete Symptome/Probleme (als HTML <ul><li>)
@@ -62,7 +62,9 @@ REGELN:
 
 Signal/Anlass für den Brief: ${signal}
 
-Schreibe den kompletten Brieftext als HTML. Denke daran: {{qr_code}} als Platzhalter für den QR-Code verwenden. Keine Anrede am Anfang — die wird separat hinzugefügt.`,
+WICHTIG: Beginne den Brief DIREKT mit dem ersten inhaltlichen Satz. KEINE Anrede ("Sehr geehrter...", "Lieber...", etc.) — diese wird separat manuell hinzugefügt. Erster Satz = sofort der persönliche Einstieg basierend auf dem Signal.
+
+Schreibe den kompletten Brieftext als HTML mit {{qr_code}} als Platzhalter für den QR-Code.`,
       },
     ],
   });
@@ -75,21 +77,3 @@ Schreibe den kompletten Brieftext als HTML. Denke daran: {{qr_code}} als Platzha
   return '';
 }
 
-/**
- * Legacy function — kept for backwards compatibility but now wraps generateFullLetter
- */
-export async function generatePersonalizedIntro(
-  recipientFirstName: string,
-  recipientCompany: string | null,
-  signalCategory: string | null,
-  signalDescription: string | null
-): Promise<string> {
-  return generateFullLetter(
-    recipientFirstName,
-    '',
-    recipientCompany,
-    signalCategory,
-    signalDescription,
-    '' // no template reference
-  );
-}
