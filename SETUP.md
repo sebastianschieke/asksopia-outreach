@@ -7,6 +7,7 @@ This is a Next.js application for managing personalized landing pages and tracki
 ## Prerequisites
 
 - Node.js 18+
+- qerweqr
 - PostgreSQL database (Neon recommended for Vercel integration)
 - ClickUp workspace with API access
 - Anthropic API key
