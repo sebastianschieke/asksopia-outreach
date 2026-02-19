@@ -35,6 +35,7 @@ export const recipients = pgTable(
     anrede: varchar('anrede', { length: 50 }),
     signal_category: varchar('signal_category', { length: 255 }),
     signal_description: text('signal_description'),
+    signal_description_de: text('signal_description_de'),
     letter_generated_at: timestamp('letter_generated_at'),
     letter_sent_at: timestamp('letter_sent_at'),
     letter_version: varchar('letter_version', { length: 50 }),

@@ -236,8 +236,8 @@ export async function generateLetterPdf(
   const primaryColor = rgb(0.22, 0.51, 0.84);
 
   const bodyFontSize = 10.5;
-  const lineHeight = 17;
-  const paragraphGap = 12;
+  const lineHeight = 15;
+  const paragraphGap = 7;
   const bulletIndent = 14;
   const bodyBottomBoundary = margin + 120; // stop body content above footer/QR area
 

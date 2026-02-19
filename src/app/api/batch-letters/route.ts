@@ -106,17 +106,14 @@ export async function POST(request: NextRequest) {
         let effectiveTemplate = template;
         if (personalize) {
           try {
-            const templateReference = (template.body_html || '')
-              .replace(/<[^>]+>/g, '')
-              .replace(/\{\{qr_code\}\}/g, '[QR-Code hier]')
-              .trim();
             const letterHtml = await generateFullLetter(
               (recipient.first_name as string) || '',
               (recipient.last_name as string) || '',
               recipient.company as string | null,
+              recipient.industry as string | null,
               recipient.signal_category as string | null,
               recipient.signal_description as string | null,
-              templateReference
+              recipient.anrede as string | null
             );
             effectiveTemplate = {
               ...template,

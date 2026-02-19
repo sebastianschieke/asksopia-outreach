@@ -25,6 +25,23 @@ export async function initializeDatabase() {
 }
 
 /**
+ * Add signal_description_de column for cached German translations
+ * Run once: POST /api/admin/seed or call directly
+ */
+export async function addSignalDescriptionDeColumn() {
+  try {
+    await db.execute(sql`
+      ALTER TABLE recipients
+      ADD COLUMN IF NOT EXISTS signal_description_de TEXT
+    `);
+    console.log('Added signal_description_de column');
+  } catch (error) {
+    console.error('Migration failed:', error);
+    throw error;
+  }
+}
+
+/**
  * Check if database is accessible
  */
 export async function checkDatabaseConnection(): Promise<boolean> {

@@ -74,10 +74,17 @@ export default async function LandingPage({ params }: PageProps) {
 
   const { recipient, template } = data;
 
+  // Use the pre-translated German signal (generated at import time).
+  // Falls back to the original English if not yet translated.
+  const recipientDe: Recipient = {
+    ...recipient,
+    signal_description: recipient.signal_description_de ?? recipient.signal_description,
+  };
+
   return (
     <LandingClient
       token={token}
-      recipient={recipient}
+      recipient={recipientDe}
       vimeoVideoId={template?.vimeo_video_id || ''}
       bookingUrl={BOOKING_URL}
       landingTemplate={template}

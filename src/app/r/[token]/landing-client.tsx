@@ -1,7 +1,7 @@
 'use client';
 
-import { useEffect, useState, useRef } from 'react';
-import { Calendar, Mail, CheckCircle2 } from 'lucide-react';
+import { useEffect, useRef } from 'react';
+import { Calendar } from 'lucide-react';
 import type { Recipient, LandingPageTemplate } from '@/lib/types';
 
 declare global {
@@ -40,6 +40,11 @@ function getSessionId(): string {
   return sessionId;
 }
 
+// Strip characters outside ISO-8859-1 range to prevent Chrome's
+// "String contains non ISO-8859-1 code point" fetch error on non-Latin locales.
+const toLatin1 = (s: string | null | undefined): string | null =>
+  s ? s.replace(/[^\x00-\xFF]/g, '') : null;
+
 async function trackEvent(token: string, eventType: string, eventValue?: string, percent?: number) {
   const sessionId = getSessionId();
   try {
@@ -50,17 +55,35 @@ async function trackEvent(token: string, eventType: string, eventValue?: string,
         token,
         session_id: sessionId,
         event_type: eventType,
-        event_value: eventValue,
-        percent,
+        event_value: eventValue ?? null,
+        percent: percent ?? null,
         url_path: typeof window !== 'undefined' ? window.location.pathname : null,
-        referrer: typeof window !== 'undefined' ? document.referrer || null : null,
-        user_agent: typeof window !== 'undefined' ? navigator.userAgent : null,
+        referrer: toLatin1(typeof window !== 'undefined' ? document.referrer || null : null),
+        user_agent: toLatin1(typeof window !== 'undefined' ? navigator.userAgent : null),
       }),
     });
   } catch (error) {
     console.error('Failed to track event:', error);
   }
 }
+
+const risks = [
+  {
+    number: '01',
+    title: 'Schlüsselpersonen werden zu Engpässen',
+    text: 'Kritisches Wissen konzentriert sich auf wenige Personen. Fehlt eine davon, stockt die Lieferfähigkeit. Das ist kein Personalrisiko – es ist ein strukturelles.',
+  },
+  {
+    number: '02',
+    title: 'Teams erfinden Lösungen neu',
+    text: 'Bereits gelöste Probleme werden neu bearbeitet, weil das Wissen darüber nirgendwo verfügbar ist. Das kostet Marge, nicht nur Zeit.',
+  },
+  {
+    number: '03',
+    title: 'Entscheidungen sind nicht nachvollziehbar',
+    text: 'Wenn Entscheidungsgrundlagen fehlen, entstehen Nacharbeit und vermeidbare Fehler auf der Führungsebene. Vertrauen in interne Prozesse leidet.',
+  },
+];
 
 export function LandingClient({
   token,
@@ -69,7 +92,6 @@ export function LandingClient({
   bookingUrl,
   landingTemplate,
 }: LandingClientProps) {
-  const [noInterestConfirmed, setNoInterestConfirmed] = useState(false);
   const playerRef = useRef<VimeoPlayer | null>(null);
   const playerContainerRef = useRef<HTMLDivElement>(null);
   const trackedEventsRef = useRef<Set<string>>(new Set());
@@ -148,18 +170,43 @@ export function LandingClient({
     if (bookingUrl) window.open(bookingUrl, '_blank');
   };
 
-  const handleEmailInfo = () => {
-    trackEvent(token, 'cta_click', 'email');
-    window.location.href = 'mailto:contact@asksopia.com?subject=Informationsanfrage';
-  };
+  const getSubheadline = (): string => {
+    const company = recipient.company || 'Ihr Unternehmen';
 
-  const handleNoInterest = () => {
-    trackEvent(token, 'cta_click', 'no_interest');
-    setNoInterestConfirmed(true);
+    // Strip full-sentence prefixes the model sometimes adds, and trailing dots.
+    const rawSignal = recipient.signal_description?.trim() || null;
+    const signal = rawSignal
+      ? rawSignal
+          .replace(/^Das Unternehmen wächst[\s,]*/i, '')
+          .replace(/^Das Unternehmen verändert sich[\s,]*/i, '')
+          .replace(/\.+$/, '')
+          .trim() || null
+      : null;
+
+    if (recipient.signal_category === 'Growth') {
+      const opener = signal ? `${company} wächst ${signal}.` : `${company} wächst.`;
+      return `${opener} In solchen Phasen entstehen Wissenssilos, bevor Strukturen mithalten können – einzelne Personen werden zum Engpass, oft bevor es jemand bemerkt.`;
+    }
+
+    if (recipient.signal_category === 'Decline') {
+      const opener = signal ? `${company} verändert sich ${signal}.` : `${company} steht vor Veränderungen.`;
+      return `${opener} Genau jetzt ist das Risiko am höchsten, kritisches Wissen zu verlieren, bevor Gegenmaßnahmen greifen.`;
+    }
+
+    return 'Viele CEOs unterschätzen, wie direkt Wissensrisiken operative Lieferfähigkeit und Margen beeinflussen.';
   };
 
   const replacePlaceholders = (text: string | null): string => {
     if (!text) return '';
+    const formatAnrede = (anrede: string | null): string => {
+      if (!anrede) return '';
+      switch (anrede?.toLowerCase()) {
+        case 'herr': return `Sehr geehrter Herr ${recipient.last_name || ''}`;
+        case 'frau': return `Sehr geehrte Frau ${recipient.last_name || ''}`;
+        case 'dear': return `Dear ${recipient.first_name || ''}`;
+        default: return '';
+      }
+    };
     return text
       .replace(/\{\{first_name\}\}/g, recipient.first_name || '')
       .replace(/\{\{last_name\}\}/g, recipient.last_name || '')
@@ -167,83 +214,11 @@ export function LandingClient({
       .replace(/\{\{anrede\}\}/g, formatAnrede(recipient.anrede));
   };
 
-  const formatAnredeGreeting = (anrede: string | null): string => {
-    switch (anrede?.toLowerCase()) {
-      case 'herr':
-        return `Herr ${recipient.last_name || ''}`;
-      case 'frau':
-        return `Frau ${recipient.last_name || ''}`;
-      case 'dear':
-        return recipient.first_name || '';
-      default:
-        return recipient.last_name || recipient.first_name || '';
-    }
-  };
-
-  const formatAnrede = (anrede: string | null): string => {
-    if (!anrede) return '';
-    switch (anrede?.toLowerCase()) {
-      case 'herr':
-        return `Sehr geehrter Herr ${recipient.last_name || ''}`;
-      case 'frau':
-        return `Sehr geehrte Frau ${recipient.last_name || ''}`;
-      case 'dear':
-        return `Dear ${recipient.first_name || ''}`;
-      default:
-        return '';
-    }
-  };
-
-  const greeting = landingTemplate?.headline
-    ? replacePlaceholders(landingTemplate.headline)
-    : `Hallo ${formatAnredeGreeting(recipient.anrede)}`;
-
-  const subheadline = landingTemplate?.subheadline
-    ? replacePlaceholders(landingTemplate.subheadline)
-    : 'Entdecken Sie, wie askSOPia.com Ihre Beratung effizienter macht.';
-
-  const signalSentence = (() => {
-    if (!recipient.signal_category && !recipient.signal_description) return null;
-    const company = recipient.company || 'Ihr Unternehmen';
-    switch (recipient.signal_category) {
-      case 'Growth':
-        return `Wachstum schafft Chancen – und neue Herausforderungen. Sehen Sie, wie askSOPia.com ${company} dabei hilft, skalierbar und effizient zu bleiben.`;
-      case 'Decline':
-        return `Gerade in schwierigen Phasen kommt es auf die richtigen Hebel an. Erfahren Sie, wie askSOPia.com ${company} gezielt unterstützen kann.`;
-      case 'Leadership Change':
-        return `Neue Führung, neue Möglichkeiten. Erfahren Sie, wie askSOPia.com diesen Übergang für ${company} zum Vorteil macht.`;
-      case 'Funding':
-        return `Mit frischem Kapital entstehen neue Prioritäten. Sehen Sie, wie askSOPia.com ${company} beim nächsten Wachstumsschritt begleitet.`;
-      case 'Strategic Shift':
-        return `Strategische Neuausrichtungen brauchen den richtigen Partner. Entdecken Sie, wie askSOPia.com ${company} auf diesem Weg unterstützt.`;
-      default:
-        return `Entdecken Sie, wie askSOPia.com auch ${company} effizienter und erfolgreicher macht.`;
-    }
-  })();
-
-  const ctaButtonText = landingTemplate?.cta_button_text || 'Termin vereinbaren';
-
-  if (noInterestConfirmed) {
-    return (
-      <div className="min-h-screen flex items-center justify-center" style={{ backgroundColor: '#f8f8fa' }}>
-        <div
-          className="w-full max-w-sm text-center p-8 rounded-lg"
-          style={{ backgroundColor: '#ffffff', border: '1px solid #e5e5ea' }}
-        >
-          <CheckCircle2 className="h-16 w-16 mx-auto mb-4" style={{ color: '#22c55e' }} />
-          <h1 className="text-xl font-bold mb-2" style={{ color: NAVY }}>
-            Vielen Dank!
-          </h1>
-          <p className="text-sm" style={{ color: '#6b7280' }}>
-            Wir haben Ihre Rückmeldung erhalten. Falls Sie später Interesse haben, können Sie jederzeit zurückkommen.
-          </p>
-        </div>
-      </div>
-    );
-  }
-
   return (
-    <div className="min-h-screen" style={{ backgroundColor: '#f8f8fa', fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" }}>
+    <div
+      className="min-h-screen"
+      style={{ backgroundColor: '#f8f8fa', fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" }}
+    >
       <header
         className="sticky top-0 z-[9999]"
         style={{ backgroundColor: '#ffffff', borderBottom: '1px solid #e5e5ea' }}
@@ -254,21 +229,18 @@ export function LandingClient({
       </header>
 
       <main className="max-w-2xl mx-auto px-5">
+
+        {/* Hero */}
         <section className="pt-10 pb-8 text-center">
-          <h1 className="text-2xl sm:text-3xl font-bold tracking-tight mb-3" style={{ color: NAVY }}>
-            {greeting}
+          <h1 className="text-2xl sm:text-3xl font-bold tracking-tight mb-4" style={{ color: NAVY }}>
+            Die 3 Wissensrisiken, die CEOs häufig unterschätzen
           </h1>
-          {signalSentence ? (
-            <p className="text-base sm:text-lg leading-relaxed" style={{ color: '#4b5563' }}>
-              {signalSentence}
-            </p>
-          ) : (
-            <p className="text-base sm:text-lg leading-relaxed" style={{ color: '#4b5563' }}>
-              {subheadline}
-            </p>
-          )}
+          <p className="text-base sm:text-lg leading-relaxed" style={{ color: '#4b5563' }}>
+            {getSubheadline()}
+          </p>
         </section>
 
+        {/* Video */}
         <section className="pb-8">
           <div
             className="rounded-lg overflow-hidden"
@@ -282,36 +254,61 @@ export function LandingClient({
           </div>
         </section>
 
-        <section className="pb-10">
-          <div className="flex flex-col gap-3 max-w-md mx-auto">
+        {/* 3 Risks */}
+        <section className="pb-8">
+          <div className="flex flex-col gap-4">
+            {risks.map((risk) => (
+              <div
+                key={risk.number}
+                className="rounded-lg p-5"
+                style={{ backgroundColor: '#ffffff', border: '1px solid #e5e5ea' }}
+              >
+                <div className="flex items-start gap-4">
+                  <span
+                    className="text-xs font-bold tabular-nums mt-0.5 shrink-0"
+                    style={{ color: BLUE }}
+                  >
+                    {risk.number}
+                  </span>
+                  <div>
+                    <h3 className="text-sm font-semibold mb-1" style={{ color: NAVY }}>
+                      {risk.title}
+                    </h3>
+                    <p className="text-sm leading-relaxed" style={{ color: '#6b7280' }}>
+                      {risk.text}
+                    </p>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </section>
+
+        {/* Bridge + CTA */}
+        <section className="pb-6">
+          <div className="max-w-md mx-auto">
+            <p className="text-sm text-center mb-4" style={{ color: '#4b5563' }}>
+              Prüfen Sie in 15 Minuten, welche dieser Risiken in Ihrem Unternehmen bereits aktiv sind.
+            </p>
             <button
               onClick={handleBookCall}
               className="flex items-center justify-center gap-3 w-full h-12 rounded-md text-base font-medium transition-opacity hover:opacity-90"
               style={{ backgroundColor: BLUE, color: '#ffffff' }}
             >
               <Calendar className="h-5 w-5" />
-              {ctaButtonText}
-            </button>
-
-            <button
-              onClick={handleEmailInfo}
-              className="flex items-center justify-center gap-3 w-full h-12 rounded-md text-base font-medium transition-opacity hover:opacity-90"
-              style={{ backgroundColor: '#ffffff', color: NAVY, border: `1px solid ${NAVY}20` }}
-            >
-              <Mail className="h-5 w-5" />
-              Infos per E-Mail
-            </button>
-
-            <button
-              onClick={handleNoInterest}
-              className="w-full h-10 text-sm transition-opacity hover:opacity-70"
-              style={{ color: '#9ca3af' }}
-            >
-              Aktuell kein Bedarf
+              15-minütigen Austausch buchen
             </button>
           </div>
         </section>
 
+        {/* Trust */}
+        <section className="pb-10 text-center">
+          <p className="text-sm" style={{ color: '#9ca3af' }}>
+            Kein Newsletter. Kein Sales-Funnel.
+          </p>
+        </section>
+
+        {/* Optional template body */}
         {landingTemplate?.body_html && (
           <section className="pb-10">
             <div
@@ -322,24 +319,6 @@ export function LandingClient({
           </section>
         )}
 
-        <section className="pb-10">
-          <div className="rounded-lg p-8 text-center" style={{ backgroundColor: NAVY }}>
-            <h2 className="text-lg font-semibold mb-2" style={{ color: '#ffffff' }}>
-              Bereit für den nächsten Schritt?
-            </h2>
-            <p className="text-sm mb-6" style={{ color: 'rgba(255,255,255,0.7)' }}>
-              Lassen Sie uns gemeinsam Ihre Potenziale entdecken.
-            </p>
-            <button
-              onClick={handleBookCall}
-              className="inline-flex items-center justify-center gap-2 h-11 px-6 rounded-md text-sm font-medium transition-opacity hover:opacity-90"
-              style={{ backgroundColor: BLUE, color: '#ffffff' }}
-            >
-              <Calendar className="h-4 w-4" />
-              {ctaButtonText}
-            </button>
-          </div>
-        </section>
       </main>
 
       <footer style={{ borderTop: '1px solid #e5e5ea' }}>

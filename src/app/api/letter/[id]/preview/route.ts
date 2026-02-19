@@ -1,20 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { db, recipients, letterTemplates } from '@/lib/db';
+import { db, recipients } from '@/lib/db';
 import { eq } from 'drizzle-orm';
 import { generateFullLetter } from '@/lib/claude';
-import type { Recipient, LetterTemplate } from '@/lib/types';
+import type { Recipient } from '@/lib/types';
 
 interface RouteParams {
   params: Promise<{
     id: string;
   }>;
-}
-
-function stripAnrede(html: string): string {
-  // Remove German salutations Claude may output despite instructions
-  return html
-    .replace(/^\s*<p>\s*(Sehr geehrte[rn]?|Liebe[r]?|Guten Tag)[^<]{0,150}<\/p>\s*/i, '')
-    .trimStart();
 }
 
 function checkAdmin(request: NextRequest): boolean {
@@ -54,51 +47,16 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
 
     const recipient = recipientResult[0] as unknown as Recipient;
 
-    // Fetch letter template (used as reference for Claude)
-    let template: LetterTemplate | null = null;
-
-    if (recipient.industry) {
-      const industryTemplate = await db
-        .select()
-        .from(letterTemplates)
-        .where(eq(letterTemplates.industry, recipient.industry))
-        .limit(1);
-      template = (industryTemplate[0] || null) as unknown as LetterTemplate | null;
-    }
-
-    if (!template) {
-      const defaultTemplate = await db
-        .select()
-        .from(letterTemplates)
-        .where(eq(letterTemplates.is_default, true))
-        .limit(1);
-      template = (defaultTemplate[0] || null) as unknown as LetterTemplate | null;
-    }
-
-    if (!template) {
-      return NextResponse.json({ error: 'No letter template found. Please seed a default template.' }, { status: 404 });
-    }
-
-    // Strip HTML tags from template to create a clean reference text for Claude
-    // Replace [Firma] placeholder with the actual company name
-    const templateReference = (template.body_html || '')
-      .replace(/<[^>]+>/g, '')
-      .replace(/\{\{qr_code\}\}/g, '[QR-Code hier]')
-      .replace(/\[Firma\]/g, recipient.company || 'Ihrem Unternehmen')
-      .trim();
-
     // Generate full letter via Claude
-    let fullLetterHtml = await generateFullLetter(
+    const fullLetterHtml = await generateFullLetter(
       recipient.first_name || '',
       recipient.last_name || '',
       recipient.company,
+      recipient.industry,
       recipient.signal_category,
       recipient.signal_description,
-      templateReference
+      recipient.anrede
     );
-
-    // Strip any salutation Claude may have added despite instructions
-    fullLetterHtml = stripAnrede(fullLetterHtml);
 
     return NextResponse.json({
       recipient: {

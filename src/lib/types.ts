@@ -21,6 +21,7 @@ export interface Recipient {
   anrede: string | null;
   signal_category: string | null;
   signal_description: string | null;
+  signal_description_de: string | null;
   letter_generated_at: Date | null;
   letter_sent_at: Date | null;
   letter_version: string | null;

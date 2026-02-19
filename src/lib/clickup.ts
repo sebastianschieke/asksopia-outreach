@@ -2,6 +2,7 @@ import { db, recipients } from './db';
 import { eq } from 'drizzle-orm';
 import { generateToken } from './tokens';
 import { computeRecipientStatus } from './tracking';
+import { translateSignalToGerman } from './claude';
 import type { Recipient, ClickUpTask } from './types';
 
 const CLICKUP_API_URL = 'https://api.clickup.com/api/v2';
@@ -273,6 +274,15 @@ export async function syncFromClickUp(listId: string): Promise<{ created: number
         .where(eq(recipients.clickup_task_id, task.id))
         .limit(1);
 
+      // Translate signal description to German if not already done
+      if (recipientData.signal_description) {
+        const existingDe = existing[0]?.signal_description_de as string | null | undefined;
+        const signalChanged = existing.length === 0 || (existing[0] as any)?.signal_description !== recipientData.signal_description;
+        if (!existingDe || signalChanged) {
+          recipientData.signal_description_de = await translateSignalToGerman(recipientData.signal_description);
+        }
+      }
+
       if (existing.length > 0) {
         // Update existing recipient
         await db
@@ -285,6 +295,7 @@ export async function syncFromClickUp(listId: string): Promise<{ created: number
           .where(eq(recipients.clickup_task_id, task.id));
         updated++;
       } else {
+
         // Insert new recipient
         await db.insert(recipients).values({
           ...recipientData,

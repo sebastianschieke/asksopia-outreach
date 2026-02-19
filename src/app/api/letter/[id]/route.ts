@@ -147,38 +147,14 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       // Use edited letter from the modal
       letterHtml = body.letterHtml;
     } else {
-      // Fetch template as reference and generate via Claude
-      let template: LetterTemplate | null = null;
-
-      if (recipient.industry) {
-        const industryTemplate = await db
-          .select()
-          .from(letterTemplates)
-          .where(eq(letterTemplates.industry, recipient.industry))
-          .limit(1);
-        template = (industryTemplate[0] || null) as unknown as LetterTemplate | null;
-      }
-
-      if (!template) {
-        const defaultTemplate = await db
-          .select()
-          .from(letterTemplates)
-          .where(eq(letterTemplates.is_default, true))
-          .limit(1);
-        template = (defaultTemplate[0] || null) as unknown as LetterTemplate | null;
-      }
-
-      const templateReference = template
-        ? (template.body_html || '').replace(/<[^>]+>/g, '').replace(/\{\{qr_code\}\}/g, '[QR-Code hier]').trim()
-        : '';
-
       letterHtml = await generateFullLetter(
         recipient.first_name || '',
         recipient.last_name || '',
         recipient.company,
+        recipient.industry,
         recipient.signal_category,
         recipient.signal_description,
-        templateReference
+        recipient.anrede
       );
     }
 
