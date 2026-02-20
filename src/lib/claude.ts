@@ -65,6 +65,7 @@ Non-Negotiable Writing Rules:
 - No exclamation marks
 - No links in the text (QR code exists separately)
 - Must sound like a calm, competent human writing to a peer
+- Must mention the company name in the first sentence
 - Must integrate the concrete signal naturally in the first 1–2 sentences
 - Must translate the signal into a knowledge-related business risk
 - Must frame consequences in CEO terms: Marge, Delivery, Engpässe, Abhängigkeit von Einzelpersonen

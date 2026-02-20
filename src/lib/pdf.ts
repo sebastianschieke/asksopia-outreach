@@ -375,15 +375,7 @@ export async function generateLetterPdf(
     y -= paragraphGap;
     const qrX = (width - qrSize) / 2;
     page.drawImage(qrImage, { x: qrX, y: y - qrSize, width: qrSize, height: qrSize });
-    const urlWidth = helvetica.widthOfTextAtSize(landingUrl, 7);
-    page.drawText(landingUrl, {
-      x: (width - urlWidth) / 2,
-      y: y - qrSize - 10,
-      size: 7,
-      font: helvetica,
-      color: primaryColor,
-    });
-    y -= qrSize + 36;
+    y -= qrSize + 20;
     qrRenderedInline = true;
   }
 
@@ -479,13 +471,6 @@ export async function generateLetterPdf(
     const qrX = width - margin - qrSize;
     const qrY = margin + 15;
     page.drawImage(qrImage, { x: qrX, y: qrY, width: qrSize, height: qrSize });
-    page.drawText(landingUrl, {
-      x: qrX,
-      y: qrY - 12,
-      size: 7,
-      font: helvetica,
-      color: primaryColor,
-    });
   }
 
   const footerFontSize = 7;
@@ -495,11 +480,10 @@ export async function generateLetterPdf(
   const footerColor = rgb(0.4, 0.4, 0.4);
 
   const footerLines = [
-    'askSOPia.com ist eine Marke der NOVELDO AI GmbH – Am Salzhaus 2 – 60311 Frankfurt am Main',
-    'contact@asksopia.com – www.asksopia.com',
+    'askSOPia ist eine Marke der NOVELDO AI GmbH · Am Salzhaus 2 · 60311 Frankfurt am Main',
+    'contact@asksopia.com',
     '',
-    'Der QR-Code dient ausschließlich der technischen Zuordnung und statistischen Auswertung.',
-    'Wenn Sie keine weiteren Informationen wünschen, genügt eine kurze Mitteilung.',
+    'Einfache Informationsseite. Kein Newsletter.',
   ];
 
   for (const footerLine of footerLines) {

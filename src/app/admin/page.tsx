@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { AlertCircle, CheckCircle, Eye, FileText, LogOut, RefreshCw, Download, X, Sparkles, Plus, Pencil, Trash2, Video } from 'lucide-react';
+import { AlertCircle, CheckCircle, Eye, FileText, LogOut, RefreshCw, Download, X, Sparkles, Plus, Pencil, Trash2, Video, RotateCcw } from 'lucide-react';
 import type { RecipientSummary, LandingPageTemplate } from '@/lib/types';
 
 interface Stats {
@@ -69,6 +69,9 @@ export default function AdminPage() {
   const [offset, setOffset] = useState(0);
   const [total, setTotal] = useState(0);
   const limit = 50;
+
+  // Selection state
+  const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
 
   // Letter Editor state
   const [showEditor, setShowEditor] = useState(false);
@@ -315,6 +318,25 @@ export default function AdminPage() {
 
   const handleFilterChange = () => { setOffset(0); loadDashboard(); };
 
+  const handleResetCounter = async () => {
+    if (selectedIds.size === 0) return;
+    if (!confirm(`Reset all event data for ${selectedIds.size} selected recipient(s)? This cannot be undone.`)) return;
+    setLoading(true); setError(null);
+    try {
+      const response = await fetch('/api/admin/reset-events', {
+        method: 'POST',
+        headers: { Authorization: getAuthHeader(), 'Content-Type': 'application/json' },
+        body: JSON.stringify({ recipientIds: Array.from(selectedIds) }),
+      });
+      if (!response.ok) throw new Error('Reset failed');
+      const data = await response.json();
+      setSelectedIds(new Set());
+      alert(`Reset successful: ${data.deleted} event(s) deleted.`);
+      await loadDashboard();
+    } catch (err) { setError(err instanceof Error ? err.message : 'Reset failed'); }
+    finally { setLoading(false); }
+  };
+
   // ── Login ──────────────────────────────────────────────────────
   if (!isLoggedIn) {
     return (
@@ -423,6 +445,12 @@ export default function AdminPage() {
                 className="flex items-center gap-2 px-4 py-2 bg-orange-500 hover:bg-orange-600 text-white rounded-lg transition disabled:opacity-50">
                 <Download size={20} />Download Letters (ZIP)
               </button>
+              {selectedIds.size > 0 && (
+                <button onClick={handleResetCounter} disabled={loading}
+                  className="flex items-center gap-2 px-4 py-2 bg-red-500 hover:bg-red-600 text-white rounded-lg transition disabled:opacity-50">
+                  <RotateCcw size={20} />Reset Counter ({selectedIds.size})
+                </button>
+              )}
             </div>
 
             {/* Filters */}
@@ -457,6 +485,17 @@ export default function AdminPage() {
                 <table className="w-full">
                   <thead style={{ backgroundColor: '#1a1a2e' }}>
                     <tr>
+                      <th className="px-4 py-3">
+                        <input
+                          type="checkbox"
+                          className="h-4 w-4 rounded border-gray-400"
+                          checked={recipients.length > 0 && recipients.every((r) => selectedIds.has(r.id))}
+                          onChange={(e) => {
+                            if (e.target.checked) setSelectedIds(new Set(recipients.map((r) => r.id)));
+                            else setSelectedIds(new Set());
+                          }}
+                        />
+                      </th>
                       {['Name', 'Company', 'Industry', 'Signal', 'Status', 'Video %', 'Visits', 'Last Activity', 'Actions'].map((h) => (
                         <th key={h} className="px-6 py-3 text-left text-sm font-semibold text-white">{h}</th>
                       ))}
@@ -464,7 +503,20 @@ export default function AdminPage() {
                   </thead>
                   <tbody>
                     {recipients.map((r) => (
-                      <tr key={r.id} className="border-t border-gray-200 hover:bg-gray-50">
+                      <tr key={r.id} className={`border-t border-gray-200 hover:bg-gray-50 ${selectedIds.has(r.id) ? 'bg-blue-50' : ''}`}>
+                        <td className="px-4 py-4">
+                          <input
+                            type="checkbox"
+                            className="h-4 w-4 rounded border-gray-300"
+                            checked={selectedIds.has(r.id)}
+                            onChange={(e) => {
+                              const next = new Set(selectedIds);
+                              if (e.target.checked) next.add(r.id);
+                              else next.delete(r.id);
+                              setSelectedIds(next);
+                            }}
+                          />
+                        </td>
                         <td className="px-6 py-4 text-sm">{r.first_name} {r.last_name}</td>
                         <td className="px-6 py-4 text-sm text-gray-600">{r.company || '-'}</td>
                         <td className="px-6 py-4 text-sm text-gray-600">{r.industry || <span className="text-gray-300">—</span>}</td>
